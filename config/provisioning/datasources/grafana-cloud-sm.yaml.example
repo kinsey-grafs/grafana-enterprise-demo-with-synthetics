@@ -1,0 +1,32 @@
+# Copy to grafana-cloud-sm.yaml (same directory) and replace placeholders.
+# Names MUST match jsonData.logs.grafanaName / jsonData.metrics.grafanaName in
+# config/provisioning/plugins/synthetic-monitoring.yaml
+#
+# Values come from your Grafana Cloud stack: Connections → Hosted Prometheus / Loki
+# (URL, user/instance id, and a Cloud Access Policy token or API key as password).
+apiVersion: 1
+datasources:
+  - name: Grafana Cloud Logs (SM)
+    type: loki
+    uid: grafanacloud-sm-logs
+    access: proxy
+    url: https://logs-prod-REGION.grafana.net
+    basicAuth: true
+    basicAuthUser: "YOUR_CLOUD_LOKI_USER_OR_INSTANCE_ID"
+    jsonData:
+      maxLines: 1000
+    secureJsonData:
+      basicAuthPassword: YOUR_GRAFANA_CLOUD_TOKEN
+
+  - name: Grafana Cloud Prometheus (SM)
+    type: prometheus
+    uid: grafanacloud-sm-prom
+    access: proxy
+    url: https://prometheus-prod-REGION.grafana.net/api/prom
+    basicAuth: true
+    basicAuthUser: "YOUR_CLOUD_PROM_USER_OR_INSTANCE_ID"
+    jsonData:
+      httpMethod: POST
+      timeInterval: 60s
+    secureJsonData:
+      basicAuthPassword: YOUR_GRAFANA_CLOUD_TOKEN

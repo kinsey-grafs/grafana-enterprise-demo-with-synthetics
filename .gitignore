@@ -1,0 +1,3 @@
+# Synthetic Monitoring — copy from *.example; do not commit secrets
+config/provisioning/plugins/synthetic-monitoring.yaml
+config/provisioning/datasources/grafana-cloud-sm.yaml

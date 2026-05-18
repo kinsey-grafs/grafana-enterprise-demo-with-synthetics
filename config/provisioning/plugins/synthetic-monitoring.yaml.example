@@ -1,0 +1,37 @@
+# Copy to synthetic-monitoring.yaml (same directory) and replace placeholders, then restart Grafana.
+#
+# Same values as the SM UI flow "Already have an account? Connect": API host → apiHost below;
+# token → publisherToken (Grafana Cloud access policy; or SM/API token from Cloud if you use that path).
+#
+# References:
+#   https://grafana.com/docs/grafana-cloud/testing/synthetic-monitoring/set-up/grafana-oss-enterprise/
+#   https://github.com/grafana/synthetic-monitoring-app/blob/main/CONTRIBUTING.md
+# Probe / API host by region:
+#   https://grafana.com/docs/grafana-cloud/testing/synthetic-monitoring/set-up/set-up-private-probes/#probe-api-server-url
+#
+# stackId: replace 123456 with your integer stack ID (Grafana.com → your stack → details / URL).
+#
+# hostedId: same string as basicAuthUser on the two Cloud datasources (see grafana-cloud-sm.yaml.example).
+#
+# publisherToken: Grafana Cloud **Access Policy** token with at least:
+#   stacks:read, metrics:write, logs:write, traces:write
+# (per Synthetic Monitoring app CONTRIBUTING.md)
+apiVersion: 1
+apps:
+  - type: grafana-synthetic-monitoring-app
+    org_id: 1
+    disabled: false
+    jsonData:
+      # apiHost = **HTTP API** URL from the docs table (with https://). Do **not** use the gRPC line
+      # Cloud shows for probes (e.g. synthetic-monitoring-grpc-us-west-0.grafana.net:443) — that is a different protocol.
+      # Example US West | AWS: https://synthetic-monitoring-api-us-west-0.grafana.net
+      apiHost: https://synthetic-monitoring-api.grafana.net
+      stackId: 123456
+      logs:
+        grafanaName: Grafana Cloud Logs (SM)
+        hostedId: "YOUR_CLOUD_LOKI_USER_OR_INSTANCE_ID"
+      metrics:
+        grafanaName: Grafana Cloud Prometheus (SM)
+        hostedId: "YOUR_CLOUD_PROM_USER_OR_INSTANCE_ID"
+    secureJsonData:
+      publisherToken: YOUR_PUBLISHER_ACCESS_POLICY_TOKEN

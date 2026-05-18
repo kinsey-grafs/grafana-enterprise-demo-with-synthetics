@@ -1,0 +1,71 @@
+# Adapted from https://github.com/grafana/tns/blob/main/production/docker-compose/tempo.yaml
+# Receiver `endpoint` values are bind addresses inside the container — use 0.0.0.0, not the
+# Docker DNS name. Binding to `tempo:14268` often fails silently so Jaeger spans never arrive.
+#
+# Tempo 2.8+: `remote_write` belongs under `metrics_generator.storage`, not under `metrics_generator`.
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 3200
+  log_level: debug
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+ingester:
+  max_block_duration: 5m
+
+distributor:
+  receivers:
+    jaeger:
+      protocols:
+        thrift_http:
+          endpoint: 0.0.0.0:14268
+        grpc:
+          endpoint: 0.0.0.0:14250
+        thrift_binary:
+          endpoint: 0.0.0.0:6832
+        thrift_compact:
+          endpoint: 0.0.0.0:6831
+    zipkin:
+      endpoint: 0.0.0.0:9411
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+    opencensus:
+      endpoint: 0.0.0.0:55678
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: docker-compose
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  traces_storage:
+    path: /var/tempo/generator/traces
+  processor:
+    local_blocks:
+      filter_server_spans: false
+      flush_to_storage: true
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics, local-blocks]
+      generate_native_histograms: both

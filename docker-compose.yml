@@ -1,0 +1,233 @@
+# Grafana Enterprise + TNS (Prometheus/Loki/Tempo) + OpenSearch for local demos.
+# TNS images/config pattern: https://github.com/grafana/tns/tree/main/production/docker-compose
+#
+# Logs → Loki via Promtail + Docker socket (no "loki" Docker logging plugin on the host).
+#
+# After `docker compose up -d`:
+#   - Grafana: http://localhost:3000
+#   - Prometheus: http://localhost:9090
+#   - OpenSearch Dashboards (load sample data here): http://localhost:5601
+#   - OpenSearch API: http://localhost:9200
+#
+# OpenSearch sample data: OpenSearch Dashboards → "Add sample data" (e.g. flights / web logs),
+# then in Grafana → OpenSearch datasource set index name or use Explore with an index pattern.
+#
+# Apple Silicon: TNS images are amd64-only; `platform: linux/amd64` runs them via emulation (expected).
+
+# TNS images below are built locally so Tempo shows service names tns-app / tns-db / tns-loadgen
+# (upstream loadgen hardcodes "lb"). First run: `docker compose build db app loadgen` (or compose builds on up).
+
+services:
+  grafana:
+    image: grafana/grafana-enterprise:latest
+    container_name: grafana-enterprise
+    # Lets Grafana reach Tempo via the published host port (avoids "lookup tempo … no such host"
+    # for Traces Drilldown / metrics on some Docker Desktop setups).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SERVER_ROOT_URL: http://localhost:3000/
+      GF_INSTALL_PLUGINS: grafana-assistant-app,grafana-opensearch-datasource,grafana-synthetic-monitoring-app
+      # Synthetic Monitoring app: same as grafana.ini [plugin.grafana-synthetic-monitoring-app] enabled = true
+      # (GF_<section>_<key> with . and - → _). See Grafana "Override configuration with environment variables".
+      GF_PLUGIN_GRAFANA_SYNTHETIC_MONITORING_APP_ENABLED: "true"
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      # Datasources: local-stack.yaml + optional grafana-cloud-sm.yaml (see config/provisioning/README)
+      - ./config/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # Synthetic Monitoring app provisioning (copy synthetic-monitoring.yaml.example → synthetic-monitoring.yaml)
+      - ./config/provisioning/plugins:/etc/grafana/provisioning/plugins:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+      - opensearch
+    labels:
+      namespace: monitoring
+
+  # TNS uses weaveworks/common/tracing + Jaeger env (JAEGER_ENDPOINT), not a -traces.endpoint CLI flag.
+  db:
+    build:
+      context: .
+      dockerfile: docker/tns-trace-names.Dockerfile
+      target: tns-db
+      args:
+        TNS_REF: "47b160f"
+    image: grafana-enterprise-demo/tns-db:47b160f-tracefix
+    platform: linux/amd64
+    command: ["-log.level=debug"]
+    ports:
+      - "8000:80"
+    environment:
+      JAEGER_ENDPOINT: "http://tempo:14268/api/traces"
+      JAEGER_TAGS: job=tns/db
+      JAEGER_SAMPLER_TYPE: const
+      JAEGER_SAMPLER_PARAM: 1
+    labels:
+      namespace: tns
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/tns-trace-names.Dockerfile
+      target: tns-app
+      args:
+        TNS_REF: "47b160f"
+    image: grafana-enterprise-demo/tns-app:47b160f-tracefix
+    platform: linux/amd64
+    command: ["-log.level=debug", "http://db"]
+    ports:
+      - "8001:80"
+    environment:
+      JAEGER_ENDPOINT: "http://tempo:14268/api/traces"
+      JAEGER_TAGS: job=tns/app
+      JAEGER_SAMPLER_TYPE: const
+      JAEGER_SAMPLER_PARAM: 1
+    labels:
+      namespace: tns
+
+  loadgen:
+    build:
+      context: .
+      dockerfile: docker/tns-trace-names.Dockerfile
+      target: tns-loadgen
+      args:
+        TNS_REF: "47b160f"
+    image: grafana-enterprise-demo/tns-loadgen:47b160f-tracefix
+    platform: linux/amd64
+    command: ["-log.level=debug", "http://app"]
+    ports:
+      - "8002:80"
+    environment:
+      JAEGER_ENDPOINT: "http://tempo:14268/api/traces"
+      JAEGER_TAGS: job=tns/loadgen
+      JAEGER_SAMPLER_TYPE: const
+      JAEGER_SAMPLER_PARAM: 1
+    labels:
+      namespace: tns
+
+  prometheus:
+    image: prom/prometheus:v3.7.1
+    user: root
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=1d
+      - --enable-feature=exemplar-storage
+      - --enable-feature=native-histograms
+      - --web.enable-remote-write-receiver
+      - --log.level=debug
+      - --web.enable-admin-api
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    labels:
+      namespace: monitoring
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    labels:
+      namespace: monitoring
+
+  node_exporter:
+    image: prom/node-exporter:v1.9.1
+    container_name: node_exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)"
+    labels:
+      namespace: monitoring
+
+  loki:
+    image: grafana/loki:3.5.7
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    labels:
+      namespace: monitoring
+
+  promtail:
+    image: grafana/promtail:3.5.7
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./config/promtail.yaml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+    labels:
+      namespace: monitoring
+
+  tempo:
+    image: grafana/tempo:2.8.0
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./config/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports:
+      - "8004:3200"
+    labels:
+      namespace: monitoring
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    labels:
+      namespace: demo
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.11.1
+    ports:
+      - "5601:5601"
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      # Must be DASHBOARDS (plural) — wrong name leaves the login screen enabled
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+    depends_on:
+      - opensearch
+    labels:
+      namespace: demo
+
+volumes:
+  grafana-storage:
+  prometheus-data:
+  tempo-data:
+  opensearch-data:
