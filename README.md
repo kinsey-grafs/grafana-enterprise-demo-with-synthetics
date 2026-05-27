@@ -89,7 +89,15 @@ Licensing and entitlements follow your Grafana contract; see the [plugin page](h
 
 1. Open **http://localhost:5601**.
 2. Use **Add sample data** (e.g. flights, e-commerce, web logs).
-3. In Grafana, the provisioned OpenSearch datasource uses index pattern `opensearch_dashboards_sample_data*` (see `config/provisioning/datasources/local-stack.yaml`). Adjust in **Connections → Data sources** if your indices differ.
+3. In Grafana, use the matching provisioned datasource (see `config/provisioning/datasources/local-stack.yaml`):
+
+   | Datasource | Index | Time field |
+   |------------|--------|------------|
+   | **OpenSearch Flights** | `opensearch_dashboards_sample_data_flights` | `timestamp` |
+   | **OpenSearch Ecommerce** | `opensearch_dashboards_sample_data_ecommerce` | `order_date` |
+   | **OpenSearch Logs** | `opensearch_dashboards_sample_data_logs` | `timestamp` |
+
+   Index name is set in provisioning as `jsonData.database`. Use **Last 90 days** for flights (sample timestamps are not “last hour”).
 
 **Dashboards security plugin:** Compose sets **`DISABLE_SECURITY_DASHBOARDS_PLUGIN`** (note **DASHBOARDS** plural). A typo there leaves a login screen even when the OpenSearch API is open on `:9200`.
 

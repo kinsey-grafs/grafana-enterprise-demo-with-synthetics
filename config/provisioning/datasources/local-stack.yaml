@@ -1,10 +1,18 @@
 # Provisioned datasources — all URLs are Docker service names on the compose network.
 #
-# OpenSearch (sample data from Dashboards → Add sample data):
-#   Typical indices: opensearch_dashboards_sample_data_ecommerce, _flights, _logs
-#   In Grafana Explore → OpenSearch, set Lucene query e.g. * and pick index / pattern above.
-#   Default index pattern below matches all three after sample data is installed.
+# OpenSearch sample data (load at http://localhost:5601 → Add sample data):
+#   Each datasource pins one index + time field (they differ per dataset).
+#   Flights:   opensearch_dashboards_sample_data_flights   → timestamp
+#   Ecommerce: opensearch_dashboards_sample_data_ecommerce → order_date
+#   Logs:      opensearch_dashboards_sample_data_logs      → @timestamp
+#   Index name in provisioning is jsonData.database (not a separate YAML field).
 apiVersion: 1
+
+# Remove legacy single "OpenSearch" datasource (uid opensearch) after split into Flights/Ecommerce/Logs.
+deleteDatasources:
+  - name: OpenSearch
+    orgId: 1
+
 datasources:
   - name: Prometheus
     type: prometheus
@@ -54,7 +62,8 @@ datasources:
         tags: ["job", "instance", "pod", "namespace"]
     version: 1
 
-  - name: OpenSearch
+  # uid opensearch: keep legacy id so existing dashboards/Assistant panels still resolve.
+  - name: OpenSearch Flights
     type: grafana-opensearch-datasource
     uid: opensearch
     access: proxy
@@ -64,8 +73,38 @@ datasources:
     jsonData:
       flavor: opensearch
       version: "2.10.0"
-      timeField: "@timestamp"
-      # Index pattern after OpenSearch Dashboards "Add sample data" (ecommerce / flights / web logs)
-      database: "opensearch_dashboards_sample_data*"
+      timeField: timestamp
+      database: opensearch_dashboards_sample_data_flights
+      maxConcurrentShardRequests: 5
+    version: 1
+
+  - name: OpenSearch Ecommerce
+    type: grafana-opensearch-datasource
+    uid: opensearch-ecommerce
+    access: proxy
+    url: http://opensearch:9200
+    editable: true
+    isDefault: false
+    jsonData:
+      flavor: opensearch
+      version: "2.10.0"
+      timeField: order_date
+      database: opensearch_dashboards_sample_data_ecommerce
+      maxConcurrentShardRequests: 5
+    version: 1
+
+  - name: OpenSearch Logs
+    type: grafana-opensearch-datasource
+    uid: opensearch-logs
+    access: proxy
+    url: http://opensearch:9200
+    editable: true
+    isDefault: false
+    jsonData:
+      flavor: opensearch
+      version: "2.10.0"
+      # Use timestamp (logs index also has @timestamp alias → timestamp); avoids YAML edge cases with @
+      timeField: timestamp
+      database: opensearch_dashboards_sample_data_logs
       maxConcurrentShardRequests: 5
     version: 1
