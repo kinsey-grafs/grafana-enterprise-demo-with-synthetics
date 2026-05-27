@@ -99,6 +99,11 @@ Licensing and entitlements follow your Grafana contract; see the [plugin page](h
 
    Index name is set in provisioning as `jsonData.database`. Use **Last 90 days** for flights (sample timestamps are not “last hour”).
 
+3. **OpenSearch dashboards (provisioned)**  
+   After `docker compose up`, open **Dashboards → Demo → OpenSearch Overview** ([`/d/opensearch-overview/opensearch-overview`](http://localhost:3000/d/opensearch-overview/opensearch-overview)) — tabbed **Flights**, **Ecommerce**, and **Web Logs** (V2 dynamic layout). The standalone **OpenSearch Web Logs Overview** (`/d/opensearch-logs-overview`) remains available. Default range **Last 90 days**.  
+   Regenerate the combined dashboard: `python3 scripts/build-opensearch-overview.py`.  
+   To recreate or extend logs panels with **Grafana Assistant**, use [`docs/grafana-assistant-opensearch-logs-dashboard.md`](docs/grafana-assistant-opensearch-logs-dashboard.md).
+
 **Dashboards security plugin:** Compose sets **`DISABLE_SECURITY_DASHBOARDS_PLUGIN`** (note **DASHBOARDS** plural). A typo there leaves a login screen even when the OpenSearch API is open on `:9200`.
 
 ---
@@ -130,8 +135,11 @@ The stack uses image **`grafana/grafana-enterprise`**. In the UI, check **Help �
 │   │   ├── datasources/
 │   │   │   ├── local-stack.yaml    # Local Prometheus / Loki / Tempo / OpenSearch
 │   │   │   └── *.example           # Copy → grafana-cloud-sm.yaml (gitignored)
+│   │   ├── dashboards/             # OpenSearch logs overview (provisioned)
 │   │   └── plugins/
 │   │       └── *.example           # Copy → synthetic-monitoring.yaml (gitignored)
+├── docs/
+│   └── grafana-assistant-opensearch-logs-dashboard.md
 │   ├── prometheus.yaml
 │   ├── tempo.yaml
 │   └── promtail.yaml

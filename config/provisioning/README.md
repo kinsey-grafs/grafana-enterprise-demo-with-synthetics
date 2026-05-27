@@ -85,3 +85,26 @@ Then open **Testing & synthetics → Synthetic Monitoring**.
 If you are on a **brand-new** stack that has never run SM before and **`install`** still returns 400, confirm **`apiHost`** matches your region, access policy scopes match the table above (mint a **new** token after any scope change), and both Cloud datasources **Save & test** successfully in Grafana.
 
 Official guide: [Set up Synthetic Monitoring in a local Grafana instance](https://grafana.com/docs/grafana-cloud/testing/synthetic-monitoring/set-up/grafana-oss-enterprise/).
+
+## Provisioned dashboards
+
+`dashboards/default.yaml` loads JSON dashboards from this folder into Grafana folder **Demo**.
+
+| Dashboard | UID | Notes |
+|-----------|-----|--------|
+| **OpenSearch Overview** | `opensearch-overview` | V2 dynamic dashboard with tabs: **Flights**, **Ecommerce**, **Web Logs**. URL: `/d/opensearch-overview/opensearch-overview` |
+| OpenSearch Web Logs Overview | `opensearch-logs-overview` | Classic schema; same Web Logs tab content (standalone) |
+
+**OpenSearch Overview** requires all three sample datasets in OpenSearch Dashboards (**http://localhost:5601** → **Add sample data**): flights, e-commerce, and web logs. Default time range is **Last 90 days**.
+
+To regenerate the combined dashboard after editing a source tab:
+
+```bash
+python3 scripts/build-opensearch-overview.py
+```
+
+Sources: `config/dashboard-sources/flights.json`, `ecommerce.json` (not under `provisioning/dashboards/` — avoids duplicate import). Web Logs tab is converted from `opensearch-logs-overview.json`.
+
+**V2 provisioning:** `opensearch-overview.json` uses the Kubernetes envelope (`apiVersion: dashboard.grafana.app/v2`). Plain V2 spec-only JSON is rejected by the file provisioner.
+
+Assistant copy-paste prompt (logs only): [`docs/grafana-assistant-opensearch-logs-dashboard.md`](../../docs/grafana-assistant-opensearch-logs-dashboard.md).

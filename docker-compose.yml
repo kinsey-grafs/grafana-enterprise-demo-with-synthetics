@@ -41,6 +41,8 @@ services:
       - ./config/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       # Synthetic Monitoring app provisioning (copy synthetic-monitoring.yaml.example → synthetic-monitoring.yaml)
       - ./config/provisioning/plugins:/etc/grafana/provisioning/plugins:ro
+      # Dashboards (OpenSearch logs overview and others in config/provisioning/dashboards/)
+      - ./config/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
     depends_on:
       - prometheus
       - loki
